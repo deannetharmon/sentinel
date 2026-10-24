@@ -30,9 +30,12 @@ export function normalizeTickers(input: unknown): string[] {
   return [...out];
 }
 
+// Starting list, used until Dean sets his own via /api/tickers.
+export const DEFAULT_TICKERS = ['SPY', 'IWM', 'XLF', 'AAPL', 'NVDA', 'MRVL'];
+
 export async function getTickers(r = redis()): Promise<string[]> {
   const raw = await r.get(KEYS.tickers);
-  return raw ? normalizeTickers(JSON.parse(raw)) : [];
+  return raw ? normalizeTickers(JSON.parse(raw)) : DEFAULT_TICKERS;
 }
 
 export async function setTickers(list: string[], r = redis()): Promise<string[]> {
