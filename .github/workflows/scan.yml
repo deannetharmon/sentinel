@@ -1,0 +1,17 @@
+name: Scan
+# Free scheduler: calls Sentinel's scan endpoint every 15 min during US market hours (UTC).
+# GitHub may delay scheduled runs by several minutes; fine for paper mode.
+on:
+  schedule:
+    - cron: '*/15 14-21 * * 1-5'
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/scan
+        env:
+          SENTINEL_URL: ${{ secrets.SENTINEL_URL }}
+          SENTINEL_CRON_SECRET: ${{ secrets.SENTINEL_CRON_SECRET }}
+        run: |
+          curl -fsS --max-time 60 -H "Authorization: Bearer $SENTINEL_CRON_SECRET" "$SENTINEL_URL/api/scan"
