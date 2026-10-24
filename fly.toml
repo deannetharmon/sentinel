@@ -1,0 +1,9 @@
+# fly.toml
+# App name is supplied at launch. Always-on worker, no public ports.
+primary_region = "iad"
+
+[build]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
