@@ -1,5 +1,6 @@
 # fly.toml
-# App name is supplied at launch. Always-on worker, no public ports.
+# Always-on worker, no public ports.
+app = "sentinel-cgefxg"
 primary_region = "iad"
 
 [build]
