@@ -33,7 +33,10 @@ export function normalizeTickers(input: unknown): string[] {
 // Starting list, used until Dean sets his own via /api/tickers.
 export const DEFAULT_TICKERS = ['SPY', 'IWM', 'XLF', 'AAPL', 'NVDA', 'MRVL'];
 
+// Order: TICKERS env var (comma-separated, set in Fly) > Redis list > defaults.
 export async function getTickers(r = redis()): Promise<string[]> {
+  const fromEnv = normalizeTickers((process.env.TICKERS ?? '').split(','));
+  if (fromEnv.length) return fromEnv;
   const raw = await r.get(KEYS.tickers);
   return raw ? normalizeTickers(JSON.parse(raw)) : DEFAULT_TICKERS;
 }
