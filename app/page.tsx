@@ -50,7 +50,7 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
             ? 'REDIS_URL is not set in this Vercel project. Add it under Settings > Environment Variables, then redeploy.'
             : 'Could not reach Redis. Check that REDIS_URL starts with rediss:// and has no extra text in front.'}
         </p>
-        <p style={{ color: '#666', fontSize: 13 }}>{(e as Error).name}</p>
+        <p style={{ color: '#666', fontSize: 13 }}>Reason: {String((e as Error).message).replace(/\w+:\/\/\S+/g, '<url hidden>').slice(0, 200)}</p>
       </main>
     );
   }
