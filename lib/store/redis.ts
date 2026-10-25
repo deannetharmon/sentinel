@@ -5,6 +5,7 @@ import type { Decision } from '../rules/filters';
 const P = 'sentinel:';
 export const KEYS = {
   tickers: `${P}tickers`,
+  heartbeat: `${P}heartbeat`,
   decisions: `${P}decisions`,
   lastScan: `${P}lastScan`,
   scanLock: `${P}lock:scan`,
@@ -33,12 +34,15 @@ export function normalizeTickers(input: unknown): string[] {
 // Starting list, used until Dean sets his own via /api/tickers.
 export const DEFAULT_TICKERS = ['SPY', 'IWM', 'XLF', 'AAPL', 'NVDA', 'MRVL'];
 
-// Order: TICKERS env var (comma-separated, set in Fly) > Redis list > defaults.
+// Order: list saved from the dashboard (Redis) > TICKERS env var (comma-separated) > defaults.
 export async function getTickers(r = redis()): Promise<string[]> {
-  const fromEnv = normalizeTickers((process.env.TICKERS ?? '').split(','));
-  if (fromEnv.length) return fromEnv;
   const raw = await r.get(KEYS.tickers);
-  return raw ? normalizeTickers(JSON.parse(raw)) : DEFAULT_TICKERS;
+  if (raw) {
+    const saved = normalizeTickers(JSON.parse(raw));
+    if (saved.length) return saved;
+  }
+  const fromEnv = normalizeTickers((process.env.TICKERS ?? '').split(','));
+  return fromEnv.length ? fromEnv : DEFAULT_TICKERS;
 }
 
 export async function setTickers(list: string[], r = redis()): Promise<string[]> {
