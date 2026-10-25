@@ -16,7 +16,7 @@ function log(msg: string) {
 
 async function tick() {
   const now = new Date();
-  await redis().set(`${KEYS.lastScan}:heartbeat`, now.toISOString());
+  await redis().set(KEYS.heartbeat, now.toISOString());
   if (!isMarketOpen(now) || now.getTime() - lastScanAt < SCAN_EVERY_MS) return;
   if (!(await acquireScanLock(120))) return;
   try {
