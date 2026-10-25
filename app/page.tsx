@@ -32,12 +32,28 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
     );
   }
 
-  const r = redis();
-  const [tickers, heartbeat, decisions] = await Promise.all([
-    getTickers(r),
-    r.get(KEYS.heartbeat),
-    recentDecisions(200, r) as Promise<any[]>,
-  ]);
+  let tickers: string[], heartbeat: string | null, decisions: any[];
+  try {
+    const r = redis();
+    [tickers, heartbeat, decisions] = await Promise.all([
+      getTickers(r),
+      r.get(KEYS.heartbeat),
+      recentDecisions(200, r) as Promise<any[]>,
+    ]);
+  } catch (e) {
+    const missing = !process.env.REDIS_URL;
+    return (
+      <main style={{ maxWidth: 600 }}>
+        <h1>Sentinel</h1>
+        <p style={{ color: '#b91c1c' }}>
+          {missing
+            ? 'REDIS_URL is not set in this Vercel project. Add it under Settings > Environment Variables, then redeploy.'
+            : 'Could not reach Redis. Check that REDIS_URL starts with rediss:// and has no extra text in front.'}
+        </p>
+        <p style={{ color: '#666', fontSize: 13 }}>Reason: {String((e as Error).message).replace(/\w+:\/\/\S+/g, '<url hidden>').slice(0, 200)}</p>
+      </main>
+    );
+  }
   const beatAge = heartbeat ? Date.now() - new Date(heartbeat).getTime() : Infinity;
   const alive = beatAge < 120_000;
 
