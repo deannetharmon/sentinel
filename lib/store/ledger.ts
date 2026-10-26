@@ -32,3 +32,23 @@ export async function getAccount(r = redis()): Promise<AccountRow> {
 export async function saveAccount(a: AccountRow, r = redis()): Promise<void> {
   await r.set(ACCOUNT, JSON.stringify(a));
 }
+
+const TRADELOG = 'sentinel:tradelog';
+
+export interface TradeLogEntry {
+  at: string;
+  type: 'OPEN' | 'CLOSE' | 'SKIP' | 'INFO';
+  symbol: string;
+  message: string;
+  positionId?: string;
+  pnl?: number;
+}
+
+export async function logTrade(e: TradeLogEntry, r = redis()): Promise<void> {
+  await r.lpush(TRADELOG, JSON.stringify(e));
+  await r.ltrim(TRADELOG, 0, 499);
+}
+
+export async function recentTrades(n = 50, r = redis()): Promise<TradeLogEntry[]> {
+  return (await r.lrange(TRADELOG, 0, n - 1)).map((s) => JSON.parse(s) as TradeLogEntry);
+}

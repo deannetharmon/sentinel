@@ -41,7 +41,10 @@ export function parseMetrics(payload: any, fetchedAt = new Date().toISOString())
   }));
 }
 
+let cached: { token: string; at: number } | null = null;
+
 export async function getAccessToken(): Promise<string> {
+  if (cached && Date.now() - cached.at < 10 * 60_000) return cached.token;
   const secret = process.env.TT_CLIENT_SECRET;
   const refresh = process.env.TT_REFRESH_TOKEN;
   if (!secret || !refresh) throw new Error('TT_CLIENT_SECRET / TT_REFRESH_TOKEN not set');
@@ -58,6 +61,7 @@ export async function getAccessToken(): Promise<string> {
   if (!res.ok) throw new Error(`tastytrade token refresh failed: ${res.status}`);
   const json: any = await res.json();
   if (!json.access_token) throw new Error('tastytrade token refresh returned no access_token');
+  cached = { token: json.access_token, at: Date.now() };
   return json.access_token;
 }
 

@@ -2,6 +2,8 @@
 import { cookies } from 'next/headers';
 import { COOKIE, cookieOk } from '@/lib/auth';
 import { getTickers, KEYS, recentDecisions, redis } from '@/lib/store/redis';
+import { getAccount, listPositions, recentTrades, type TradeLogEntry } from '@/lib/store/ledger';
+import type { PaperPosition } from '@/lib/paper/ledger';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,13 +35,19 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
   }
 
   let tickers: string[], heartbeat: string | null, decisions: any[];
+  let positions: PaperPosition[], startEquity: number, trades: TradeLogEntry[];
   try {
     const r = redis();
-    [tickers, heartbeat, decisions] = await Promise.all([
+    let acct;
+    [tickers, heartbeat, decisions, positions, acct, trades] = await Promise.all([
       getTickers(r),
       r.get(KEYS.heartbeat),
       recentDecisions(200, r) as Promise<any[]>,
+      listPositions(r),
+      getAccount(r),
+      recentTrades(30, r),
     ]);
+    startEquity = acct.startingEquity;
   } catch (e) {
     const missing = !process.env.REDIS_URL;
     return (
@@ -54,6 +62,13 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
       </main>
     );
   }
+  const openPos = positions.filter((p) => p.status === 'OPEN');
+  const closedPos = positions
+    .filter((p) => p.status === 'CLOSED')
+    .sort((a, b) => String(b.closedAt).localeCompare(String(a.closedAt)));
+  const realized = closedPos.reduce((s, p) => s + (p.realizedPnl ?? 0), 0);
+  const wins = closedPos.filter((p) => (p.realizedPnl ?? 0) > 0).length;
+  const money = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toFixed(2)}`;
   const beatAge = heartbeat ? Date.now() - new Date(heartbeat).getTime() : Infinity;
   const alive = beatAge < 120_000;
 
@@ -70,7 +85,77 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
       <section style={box}>
         <strong>Worker: </strong>
         <span style={{ color: alive ? '#15803d' : '#b91c1c' }}>{alive ? '● running' : '● not responding'}</span>
-        <span style={{ color: '#666' }}> · last heartbeat {ago(heartbeat)} · paper mode · scan only (no trades yet)</span>
+        <span style={{ color: '#666' }}> · last heartbeat {ago(heartbeat)} · paper mode</span>
+      </section>
+
+      <section style={box}>
+        <h2 style={{ marginTop: 0 }}>Paper account</h2>
+        <p style={{ margin: 0 }}>
+          Starting {money(startEquity)} · Realized P&amp;L{' '}
+          <strong style={{ color: realized >= 0 ? '#15803d' : '#b91c1c' }}>{money(realized)}</strong> · Equity (closed trades){' '}
+          <strong>{money(startEquity + realized)}</strong> · {closedPos.length} closed ({wins} wins) · {openPos.length} open
+        </p>
+      </section>
+
+      <section style={box}>
+        <h2 style={{ marginTop: 0 }}>Open positions</h2>
+        {openPos.length === 0 ? (
+          <p style={{ color: '#666' }}>None.</p>
+        ) : (
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead><tr>{['Ticker', 'Spread', 'Expires', 'Qty', 'Credit', 'Max loss', 'Opened'].map((h) => <th key={h} style={cell}>{h}</th>)}</tr></thead>
+            <tbody>
+              {openPos.map((p) => (
+                <tr key={p.id}>
+                  <td style={cell}><strong>{p.underlying}</strong></td>
+                  <td style={cell}>{p.strategy === 'PUT_CREDIT_SPREAD' ? 'Put credit' : 'Call credit'} {p.shortStrike}/{p.longStrike}</td>
+                  <td style={cell}>{p.expiration}</td>
+                  <td style={cell}>{p.contracts}</td>
+                  <td style={cell}>{p.openCredit.toFixed(2)}</td>
+                  <td style={cell}>{money(p.maxLoss)}</td>
+                  <td style={cell}>{ago(p.openedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section style={box}>
+        <h2 style={{ marginTop: 0 }}>Closed trades</h2>
+        {closedPos.length === 0 ? (
+          <p style={{ color: '#666' }}>None yet.</p>
+        ) : (
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead><tr>{['Ticker', 'Spread', 'P&L', 'Why closed', 'Closed'].map((h) => <th key={h} style={cell}>{h}</th>)}</tr></thead>
+            <tbody>
+              {closedPos.slice(0, 20).map((p) => (
+                <tr key={p.id}>
+                  <td style={cell}><strong>{p.underlying}</strong></td>
+                  <td style={cell}>{p.shortStrike}/{p.longStrike} x{p.contracts}</td>
+                  <td style={{ ...cell, color: (p.realizedPnl ?? 0) >= 0 ? '#15803d' : '#b91c1c' }}>{money(p.realizedPnl ?? 0)}</td>
+                  <td style={cell}>{p.closeReason}</td>
+                  <td style={cell}>{ago(p.closedAt ?? null)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section style={box}>
+        <h2 style={{ marginTop: 0 }}>Activity</h2>
+        {trades.length === 0 ? (
+          <p style={{ color: '#666' }}>Nothing yet. Trades are considered during entry windows (10:15-11:30 and 14:00-15:30 ET).</p>
+        ) : (
+          <ul style={{ paddingLeft: 18, margin: 0 }}>
+            {trades.map((t, i) => (
+              <li key={i} style={{ marginBottom: 4 }}>
+                <strong>{t.type}</strong> {t.symbol}: {t.message} <span style={{ color: '#888' }}>({ago(t.at)})</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section style={box}>
